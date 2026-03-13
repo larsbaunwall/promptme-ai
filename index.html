@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta name="author" content="Lars Baunwall">
+<meta property="og:see_also" content="https://thinkability.dk">
+<link rel="author" href="https://thinkability.dk">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Teleprompter — AI Voice Tracker</title>
+<meta name="description" content="Browser-based virtual teleprompter with embedded Moonshine AI speech recognition. 100% on-device, no backend.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- Cross-Origin Isolation for WebGPU + SharedArrayBuffer (required for Moonshine AI) -->
+<script src="coi-serviceworker.js"></script>
+</head>
+<body>
+
+<!-- ══ HEADER ══════════════════════════════════════════ -->
+<header class="app-header">
+  <div class="header-left">
+    <svg class="logo" aria-label="Teleprompter" viewBox="0 0 36 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="34" height="22" rx="3" stroke="currentColor" stroke-width="2"/>
+      <path d="M6 8h16M6 13h12M6 18h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="26" cy="13" r="4" stroke="var(--color-accent)" stroke-width="2"/>
+      <circle cx="26" cy="13" r="1.5" fill="var(--color-accent)"/>
+      <path d="M13 26l5-3 5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="18" y1="23" x2="18" y2="27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span class="app-title">Prompt me!</span>
+  </div>
+
+  <div class="header-center">
+    <div id="statusBadge" class="status-badge status-idle">
+      <span class="status-dot"></span>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="wpm-display" title="Words per minute">
+      <span id="wpmValue">—</span>
+      <span class="wpm-label">WPM</span>
+    </div>
+    <div class="progress-display" title="Script progress">
+      <span id="progressValue">0%</span>
+    </div>
+    <button class="icon-btn" data-theme-toggle aria-label="Toggle theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ══ MAIN ══════════════════════════════════════════ -->
+<main class="app-main">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <!-- Script Editor -->
+    <section class="panel script-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Script</h2>
+        <div class="panel-actions">
+          <button class="text-btn" id="clearScriptBtn">Clear</button>
+          <button class="text-btn" id="sampleScriptBtn">Sample</button>
+        </div>
+      </div>
+      <textarea
+        id="scriptInput"
+        class="script-textarea"
+        placeholder="Paste or type your script here…"
+        spellcheck="true"
+      ></textarea>
+    </section>
+
+    <!-- Controls -->
+    <section class="panel controls-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Controls</h2>
+        <span id="engineIndicator" class="engine-indicator"></span>
+      </div>
+
+      <!-- Model loading bar -->
+      <div id="modelProgress" class="model-progress">
+        <div class="model-progress-label">Loading Moonshine AI model…</div>
+        <div class="model-progress-track">
+          <div id="modelProgressBar" class="model-progress-bar"></div>
+        </div>
+        <div class="model-progress-hint">~120 MB · cached after first load</div>
+      </div>
+
+      <!-- Start / Stop -->
+      <div class="control-row">
+        <button class="btn btn-accent" id="startBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+          Start Recording
+        </button>
+        <button class="btn btn-ghost" id="stopBtn" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          Stop
+        </button>
+      </div>
+
+      <!-- Options -->
+      <div class="options-grid">
+        <label class="option-label">
+          <span>Font size</span>
+          <input type="range" id="fontSizeRange" min="1.5" max="5" step="0.25" value="2.5" class="range-input">
+          <span id="fontSizeVal" class="range-val">2.5rem</span>
+        </label>
+        <label class="option-label">
+          <span>Mirror mode</span>
+          <div class="toggle-wrap">
+            <input type="checkbox" id="mirrorToggle" class="toggle-input">
+            <span class="toggle-track"></span>
+          </div>
+        </label>
+        <label class="option-label">
+          <span>Reset position</span>
+          <button class="text-btn" id="resetBtn">Reset</button>
+        </label>
+      </div>
+    </section>
+
+    <!-- Live transcript -->
+    <section class="panel transcript-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Live Transcript</h2>
+        <button class="text-btn" id="clearTranscriptBtn">Clear</button>
+      </div>
+      <div id="interimBox" class="interim-box"></div>
+      <div id="transcriptBox" class="transcript-box">
+        <span class="transcript-placeholder">Transcript will appear here as you speak…</span>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ── TELEPROMPTER VIEW ── -->
+  <div class="teleprompter-container" id="teleprompterContainer">
+    <div class="fade-top"></div>
+    <div class="fade-bottom"></div>
+    <div class="focus-line" id="focusLine"></div>
+
+    <div class="teleprompter-scroll" id="teleprompterScroll">
+      <div class="teleprompter-content" id="teleprompterContent">
+        <p class="empty-state-msg">Paste your script in the editor →</p>
+      </div>
+    </div>
+
+    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle fullscreen">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+      </svg>
+    </button>
+  </div>
+
+</main>
+
+<!-- ══ FOOTER ══════════════════════════════════════════ -->
+<footer class="app-footer">
+    <span>&copy; Lars Baunwall</span>
+    <span>·</span>
+  <span>Powered by Moonshine AI — runs 100% in your browser</span>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
