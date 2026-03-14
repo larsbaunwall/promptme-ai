@@ -39,10 +39,10 @@ const MAX_NUM_PREV_BUFFERS = Math.ceil(SPEECH_PAD_SAMPLES / NEW_BUFFER_SIZE);
 // v6: Eager partial flush — after this many seconds of continuous speech,
 // emit a partial transcript WITHOUT waiting for silence.
 // This lets the main thread start matching 1-2 seconds early.
-const EAGER_PARTIAL_MS    = 1000;   // ms of continuous speech before partial emit (v7: was 1400)
+const EAGER_PARTIAL_MS    = 500;    // ms of continuous speech before partial emit (halved from 1000 to cut lag)
 const EAGER_PARTIAL_SAMPLES = EAGER_PARTIAL_MS * (SAMPLE_RATE / 1000);
 // Max partial emits per utterance (avoid spamming)
-const MAX_PARTIAL_EMITS   = 4;
+const MAX_PARTIAL_EMITS   = 8;
 
 // ── Device detection ──────────────────────────────────────────────────────
 async function supportsWebGPU() {

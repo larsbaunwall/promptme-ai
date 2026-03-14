@@ -248,10 +248,17 @@ img, svg { display: block; }
 .wpm-label { font-size: var(--text-xs); color: var(--color-text-muted); }
 
 .progress-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
-  min-width: 3ch;
+}
+.progress-eta {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  opacity: 0.75;
 }
 
 .icon-btn {
@@ -718,9 +725,23 @@ img, svg { display: block; }
 .word.current {
   color: var(--color-word-current);
   text-shadow: 0 0 24px var(--color-accent-glow), 0 0 48px var(--color-accent-glow);
+  font-weight: 700;
+}
+
+/* Flowing highlight pill — single element that glides between words */
+.highlight-pill {
+  position: absolute;
+  pointer-events: none;
   background: var(--color-accent-highlight);
   border-radius: 6px;
-  font-weight: 700;
+  opacity: 0;
+  z-index: -1;
+  transition:
+    top    150ms cubic-bezier(0.34, 1.1, 0.64, 1),
+    left   150ms cubic-bezier(0.34, 1.1, 0.64, 1),
+    width  150ms cubic-bezier(0.34, 1.1, 0.64, 1),
+    height  80ms ease,
+    opacity 200ms ease;
 }
 
 /* Optimistic creep state — word is being predicted, not yet confirmed */
@@ -732,10 +753,7 @@ img, svg { display: block; }
 
 /* Shadow cursor — 2 words ahead prediction indicator */
 .word.shadow {
-  color: var(--color-accent);
-  opacity: 0.22;
-  text-shadow: 0 0 12px var(--color-accent-glow);
-  transition: color 120ms ease, opacity 120ms ease, text-shadow 120ms ease;
+  transition: color 120ms ease, text-shadow 120ms ease;
 }
 
 /* Sentence grouping */

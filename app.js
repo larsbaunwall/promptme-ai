@@ -59,7 +59,7 @@ const SAMPLE_SCRIPT = `Welcome to this virtual teleprompter.
 
 As you speak, the script will automatically scroll to keep up with your words. Each word you say is highlighted in real time, so you always know exactly where you are in your script.
 
-This teleprompter uses an embedded AI speech model that runs entirely in your browser. No data leaves your device, and no internet connection is required after the first load.
+This teleprompter uses an embedded AI voice model that runs entirely in your browser. No data leaves your device, and no internet connection is required after the first load.
 
 To get started, press Start Speaking. The microphone will listen to your voice and track your progress through the script automatically.
 
@@ -364,7 +364,8 @@ const state = {
   lastSpeechTime: 0,
 
   settings: { fontSize: 2.5, mirror: false },
-  worker: null,
+  vadWorker: null,    // VAD worker — Silero, runs unblocked at frame rate
+  txWorker:  null,    // Transcription worker — Moonshine, runs concurrently
   audioContext: null,
   workletNode: null,
   micStream: null,
@@ -379,26 +380,23 @@ const state = {
 // ═══════════════════════════════════════════════════════
 
 const CFG = {
-  ACCEPT_THRESHOLD:        0.32,  // min locality-adjusted score to count as a match
-  ANCHOR_THRESHOLD:        0.52,  // min score for high-confidence anchor
-  NEW_HYP_MIN_SCORE:       0.42,  // min score for a brand-new beam hypothesis (garble guard)
+  ACCEPT_THRESHOLD:        0.30,  // min locality-adjusted score (lower = more tolerant of garbled ASR)
+  ANCHOR_THRESHOLD:        0.50,  // min score for high-confidence anchor
+  NEW_HYP_MIN_SCORE:       0.40,  // min score for a brand-new beam hypothesis (garble guard)
   WINDOW_BASE:             25,    // tighter window — prevents matching far homophone occurrences
   WINDOW_MULT:             2.0,
   BEAM_SIZE:               3,
-  STALL_MS:                12000, // Only nudge after 12s true stall (not during pauses)
-  NUDGE_INTERVAL_MS:       8000,
-  WPM_DEFAULT:             135,
-  PARA_COMPLETE_RATIO:     0.60,
-  PARA_COMPLETE_DELAY:     550,
+  STALL_MS:                11000, // Nudge after 11s true stall (not during pauses)
+  NUDGE_INTERVAL_MS:       7000,
+  WPM_DEFAULT:             120,   // default — overridden by WPM slider in UI
+  PARA_COMPLETE_RATIO:     0.55,  // paragraph completion threshold
+  PARA_COMPLETE_DELAY:     500,
   GLOBAL_INTERVAL:         3,     // run global search every N transcripts
-  CREEP_SILENCE_PAUSE_MS:  600,   // ms after last transcript before creep freezes
-  CREEP_MAX_LOOKAHEAD:     1,     // max words creep can go ahead of confirmed position
+  CREEP_SILENCE_PAUSE_MS:  1000,  // ms after last transcript before creep freezes
+  CREEP_MAX_LOOKAHEAD:     3,     // max words creep can go ahead of confirmed position
   // ── Locality-aware matching ──────────────────────────────────────────────
-  // Prevents e.g. "teleprompter" in sentence 1 jumping to the same word in
-  // section 3 simply because it appears there too.
   LOCALITY_HALVING_DIST:   20,    // words ahead at which locality factor drops to 0.5
-  SEARCH_LOOKBACK:         8,     // words BEHIND currentPos still included as candidates
-                                  // (handles creep running slightly ahead of speaker)
+  SEARCH_LOOKBACK:         11,    // words BEHIND currentPos still included as candidates
   FAR_JUMP_MIN_TOKENS:     2,     // spoken tokens required to jump farther than FAR_JUMP_MAX_DIST
   FAR_JUMP_MAX_DIST:       20,    // max jump distance allowed for very short transcripts
 };
@@ -463,8 +461,11 @@ const dom = {
   interimBox:            $('interimBox'),
   wpmValue:              $('wpmValue'),
   progressValue:         $('progressValue'),
+  etaValue:              $('etaValue'),
   fontSizeRange:         $('fontSizeRange'),
   fontSizeVal:           $('fontSizeVal'),
+  wpmRange:              $('wpmRange'),
+  wpmRangeVal:           $('wpmRangeVal'),
   mirrorToggle:          $('mirrorToggle'),
   resetBtn:              $('resetBtn'),
   fullscreenBtn:         $('fullscreenBtn'),
@@ -539,6 +540,11 @@ function renderScript() {
 
   dom.teleprompterContent.innerHTML = '';
   dom.teleprompterContent.appendChild(container);
+  // Re-attach pill after innerHTML wipe
+  if (dom.highlightPill) {
+    dom.teleprompterContent.appendChild(dom.highlightPill);
+    dom.highlightPill.style.opacity = '0';
+  }
   resetPosition(false);
 }
 
@@ -701,7 +707,8 @@ function recordAnchor(newIdx) {
 }
 
 function effectiveWpm() {
-  return state.anchorWpm > 0 ? state.anchorWpm : CFG.WPM_DEFAULT;
+  if (state.anchorWpm > 0) return state.anchorWpm;
+  return dom.wpmRange ? Number(dom.wpmRange.value) : CFG.WPM_DEFAULT;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -741,16 +748,21 @@ function creepTick(now) {
   const dt = now - _creepLastTime;
   _creepLastTime = now;
 
-  // Don't creep until we've actually heard speech, and freeze when speaker pauses
+  // Don't creep until we've actually heard speech, and freeze when speaker pauses.
+  // On pause: freeze in place (no rollback — backward animation is jarring).
+  // The creep will restart forward from the transcript-confirmed position when
+  // speech resumes and a new transcript snaps us to the real position.
   const silentMs = now - state.lastSpeechTime;
   if (state.lastSpeechTime === 0 || silentMs > CFG.CREEP_SILENCE_PAUSE_MS) {
+    _creepFractional = 0;
     requestAnimationFrame(creepTick);
-    return; // suspended — resumes when next transcript updates lastSpeechTime
+    return; // suspended — no advance, no rollback
   }
 
   const wpm = effectiveWpm();
-  // Creep at 75% of real WPM — conservative so it doesn't overshoot
-  const wordsPerMs = (wpm * 0.75) / 60000;
+  // Creep at 85% of measured WPM — stays just behind the speaker,
+  // letting transcript confirmations snap forward cleanly.
+  const wordsPerMs = (wpm * 0.85) / 60000;
   _creepFractional += wordsPerMs * dt;
 
   if (_creepFractional >= 1) {
@@ -793,7 +805,7 @@ function moveCreep(idx) {
 // SHADOW CURSOR (UX trick #11)
 // ═══════════════════════════════════════════════════════
 //
-// A faint amber glow 2 words ahead of the current highlight —
+// A faint glow 2 words ahead of the current highlight —
 // shows where the engine predicts we're heading.
 
 function updateShadowCursor() {
@@ -825,15 +837,23 @@ function confirmMove(globalIdx, smooth) {
   const silentMs    = Date.now() - state.lastSpeechTime;
   const speakerPaused = state.lastSpeechTime > 0 && silentMs > CFG.CREEP_SILENCE_PAUSE_MS;
 
-  if (creepAhead > 0 && creepAhead <= 2 && !speakerPaused) {
-    // Creep is at most 2 words ahead and speaker is actively talking — acceptable.
-    // Update the confirmed target so future creep doesn't drift further.
+  // Transcript confirms a position AHEAD of where we are — always snap forward.
+  if (globalIdx > state.currentWordIndex) {
+    snapTo(globalIdx, smooth);
     state.creepTargetIndex = globalIdx;
     return;
   }
 
-  // All other cases: snap to confirmed position
-  snapTo(globalIdx, smooth);
+  // Transcript confirms a position BEHIND but within lookahead while actively speaking:
+  // the creep is acceptably ahead — just update the confirmed anchor so the cap stays honest.
+  if (creepAhead > 0 && creepAhead <= CFG.CREEP_MAX_LOOKAHEAD && !speakerPaused) {
+    state.creepTargetIndex = globalIdx;
+    return;
+  }
+
+  // Transcript confirms further behind than the lookahead budget, or speaker paused:
+  // trust the transcript anchor (snapTo is a no-op if globalIdx ≤ currentWordIndex,
+  // so we just update the cap and let creep self-correct on next speech).
   state.creepTargetIndex = globalIdx;
 }
 
@@ -938,6 +958,26 @@ function highlightCurrent() {
   if (prev) prev.classList.remove('current');
   const span = getWordSpan(state.currentWordIndex);
   if (span) { span.classList.remove('creep','shadow'); span.classList.add('current'); }
+  movePillToWord(state.currentWordIndex);
+}
+
+// Move the floating highlight pill to the given word index.
+// The pill is position:absolute inside teleprompterContent (which has
+// will-change:transform creating a stacking context), so z-index:-1 places
+// it behind the inline text while CSS transitions give the gliding effect.
+function movePillToWord(idx) {
+  const pill = dom.highlightPill;
+  if (!pill) return;
+  const span = getWordSpan(idx);
+  if (!span) { pill.style.opacity = '0'; return; }
+  const contentRect = dom.teleprompterContent.getBoundingClientRect();
+  const spanRect    = span.getBoundingClientRect();
+  const PH = 5, PV = 3;
+  pill.style.top    = (spanRect.top  - contentRect.top  - PV) + 'px';
+  pill.style.left   = (spanRect.left - contentRect.left - PH) + 'px';
+  pill.style.width  = (spanRect.width  + PH * 2) + 'px';
+  pill.style.height = (spanRect.height + PV * 2) + 'px';
+  if (state.wordCount > 0) pill.style.opacity = '1';
 }
 
 function scrollToCurrent(smooth, mode) {
@@ -1023,7 +1063,9 @@ function resetPosition(clearTx = true) {
 
   highlightCurrent();
   updateProgress();
-  if (dom.wpmValue) dom.wpmValue.textContent = '—';
+  if (dom.highlightPill) dom.highlightPill.style.opacity = '0';
+  if (dom.wpmValue)  dom.wpmValue.textContent = '—';
+  if (dom.etaValue)  dom.etaValue.textContent = '';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1160,16 +1202,22 @@ function processTranscript(chunk, isFinal) {
   const acc = isFinal ? accumulateTranscript(chunk) : (state.accumulatedText ? state.accumulatedText + ' ' + chunk : chunk);
   if (isFinal) state.recognitionBuffer = [...state.recognitionBuffer, chunk].slice(-8);
 
-  // ── Run 3 ARIA matches in parallel (all synchronous but fast now) ──
+  // ── Run 4 ARIA matches (all synchronous but fast) ──────────────────────
   const m1 = ariaMatch(chunk);                                    // new chunk only
   const m2 = state.recognitionBuffer.length >= 2
     ? ariaMatch(state.recognitionBuffer.slice(-3).join(' '))      // recent buffer
     : null;
-  const m3 = isFinal ? ariaMatch(acc) : null;                    // full accumulated
+  const m3 = isFinal ? ariaMatch(acc) : null;                    // full accumulated (final only)
+  // m4: tail of accumulated transcript — last 12 words, run on EVERY transcript.
+  // As the session grows this becomes the most drift-resistant position signal:
+  // surrounding confirmed words vote for the correct window even when the
+  // current chunk is garbled. Works on interim too, closing the latency gap.
+  const accTail = acc ? acc.split(/\s+/).slice(-12).join(' ') : null;
+  const m4 = (accTail && accTail !== chunk && accTail !== acc) ? ariaMatch(accTail) : null;
 
   // Pick best
   let best = null;
-  for (const m of [m1, m2, m3]) {
+  for (const m of [m1, m2, m3, m4]) {
     if (m && (!best || m.score > best.score)) best = m;
   }
 
@@ -1209,9 +1257,29 @@ function updateWPM() {
 }
 
 function updateProgress() {
-  if (!state.wordCount) { if (dom.progressValue) dom.progressValue.textContent = '0%'; return; }
+  if (!state.wordCount) {
+    if (dom.progressValue) dom.progressValue.textContent = '0%';
+    if (dom.etaValue)     dom.etaValue.textContent = '';
+    return;
+  }
   const pct = Math.min(100, Math.round((state.currentWordIndex / state.wordCount) * 100));
   if (dom.progressValue) dom.progressValue.textContent = `${pct}%`;
+
+  // Estimated time remaining based on current reading speed
+  if (dom.etaValue) {
+    const wordsLeft = state.wordCount - state.currentWordIndex;
+    const wpm = effectiveWpm();
+    if (!state.isRecording || wordsLeft <= 0 || wpm <= 0) {
+      dom.etaValue.textContent = '';
+    } else {
+      const totalSec = Math.round((wordsLeft / wpm) * 60);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      dom.etaValue.textContent = mins > 0
+        ? `${mins}m ${secs}s left`
+        : `${secs}s left`;
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1276,10 +1344,12 @@ registerProcessor('vad-processor', VADProcessor);
 // ═══════════════════════════════════════════════════════
 
 function initWorker() {
-  if (state.worker) return;
-  state.worker = new Worker('./whisper.worker.js', { type: 'module' });
+  if (state.vadWorker) return;
 
-  state.worker.onmessage = ({ data }) => {
+  // Shared message handler — wired to both workers.
+  // VAD worker posts: status (recording/vad_ready), segment
+  // TX worker posts:  status (loading/ready/transcribing), transcript, progress, info, error
+  const handleMessage = ({ data }) => {
     const { type, status, message, text, isFinal } = data;
 
     if (type === 'status') {
@@ -1327,11 +1397,29 @@ function initWorker() {
     }
   };
 
-  state.worker.onerror = err => {
+  const handleError = err => {
     console.error('Worker error:', err);
     setStatus('idle', 'Model failed to load');
     state.modelLoading = false;
   };
+
+  // ── VAD worker: Silero only, never blocked by Moonshine ──────────────────
+  state.vadWorker = new Worker('./vad.worker.js', { type: 'module' });
+  state.vadWorker.onmessage = ({ data }) => {
+    if (data.type === 'segment') {
+      // Relay audio segment to transcription worker.
+      // Finals are transferred (zero-copy); partials are copies so also safe to transfer.
+      state.txWorker.postMessage(data, data.buffer ? [data.buffer.buffer] : []);
+      return;
+    }
+    handleMessage({ data });
+  };
+  state.vadWorker.onerror = handleError;
+
+  // ── Transcription worker: Moonshine only, queues segments ────────────────
+  state.txWorker = new Worker('./transcribe.worker.js', { type: 'module' });
+  state.txWorker.onmessage = handleMessage;
+  state.txWorker.onerror   = handleError;
 }
 
 async function startAudio() {
@@ -1353,7 +1441,7 @@ async function startAudio() {
     const source          = state.audioContext.createMediaStreamSource(stream);
     state.workletNode     = new AudioWorkletNode(state.audioContext, 'vad-processor');
     state.workletNode.port.onmessage = e => {
-      if (state.worker && e.data.buffer) state.worker.postMessage({ buffer: e.data.buffer });
+      if (state.vadWorker && e.data.buffer) state.vadWorker.postMessage({ buffer: e.data.buffer });
     };
     source.connect(state.workletNode);
 
@@ -1392,7 +1480,7 @@ function stopAudio() {
 
 function startRecording() {
   if (!state.words.length) { dom.scriptInput.value = SAMPLE_SCRIPT; renderScript(); }
-  if (!state.worker) initWorker();
+  if (!state.vadWorker) initWorker();
   if (!state.modelReady) { state._startPending = true; setStatus('loading','Loading AI model…'); updateButtons(true); return; }
   startAudio();
 }
@@ -1481,6 +1569,9 @@ function wireEvents() {
     if (!isNaN(wordId)) seekToWord(wordId);
   });
   dom.fontSizeRange?.addEventListener('input', e => applyFontSize(parseFloat(e.target.value)));
+  dom.wpmRange?.addEventListener('input', e => {
+    dom.wpmRangeVal.textContent = e.target.value;
+  });
   dom.mirrorToggle?.addEventListener('change', e => applyMirror(e.target.checked));
   dom.fullscreenBtn?.addEventListener('click', toggleFullscreen);
   document.addEventListener('keydown', e => {
@@ -1514,6 +1605,13 @@ function init() {
   checkEngineAvailability();
   dom.scriptInput.value = SAMPLE_SCRIPT;
   renderScript();
+  // Create the floating highlight pill and attach it.
+  // Done after renderScript() so the content div exists and innerHTML wipe
+  // in renderScript re-appends it via dom.highlightPill reference.
+  const pill = document.createElement('div');
+  pill.className = 'highlight-pill';
+  dom.teleprompterContent.appendChild(pill);
+  dom.highlightPill = pill;
   updateButtons(false);
   initWorker();
 }

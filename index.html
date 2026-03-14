@@ -45,6 +45,8 @@
     </div>
     <div class="progress-display" title="Script progress">
       <span id="progressValue">0%</span>
+      <span>·</span>
+      <span class="progress-eta" id="etaValue"></span>
     </div>
     <button class="icon-btn" data-theme-toggle aria-label="Toggle theme">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -105,6 +107,11 @@
 
       <!-- Options -->
       <div class="options-grid">
+        <label class="option-label">
+          <span>Speaking pace (WPM)</span>
+          <input type="range" id="wpmRange" min="80" max="180" step="5" value="120" class="range-input">
+          <span id="wpmRangeVal" class="range-val">120</span>
+        </label>
         <label class="option-label">
           <span>Font size</span>
           <input type="range" id="fontSizeRange" min="1.5" max="5" step="0.25" value="2.5" class="range-input">
@@ -173,7 +180,7 @@
     GitHub
   </a>
   <span class="footer-sep">·</span>
-  <span>Powered by a Moonshine AI voice model, running in your browser</span>
+  <span>Powered by the Moonshine AI voice model, running entirely in your browser</span>
 </footer>
 <script type="module" src="app.js"></script>
 </body>
