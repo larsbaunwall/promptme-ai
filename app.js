@@ -918,6 +918,7 @@ function snapTo(globalIdx, smooth) {
 // Legacy moveTo (used by para advance, reset, etc.)
 function moveTo(globalIdx, smooth = true) {
   snapTo(globalIdx, smooth);
+  state.creepTargetIndex = Math.max(state.creepTargetIndex, globalIdx);
 }
 
 // ═══════════════════════════════════════════════════════
