@@ -4,6 +4,12 @@ A teleprompter that follows your voice rather than a timer. Paste in a script, p
 
 :sparkles: **[Try it online](https://larsbaunwall.github.io/promptme-ai)**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshot-light.png">
+  <img alt="Screenshot" width="50%" src="screenshot-light.png">
+</picture>
+
 ---
 
 ## How it works
