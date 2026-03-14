@@ -37,35 +37,35 @@ Microphone → AudioWorklet (PCM @ 16kHz)
 ┌─────────────────────────────────────────────────────────────────┐
 │  Browser main thread  (app.js)                                  │
 │                                                                 │
-│  ┌──────────┐  PCM   ┌──────────────────┐                      │
+│  ┌──────────┐  PCM   ┌───────────────────┐                      │
 │  │ Audio    │───────▶│  VAD Worker       │                      │
 │  │ Worklet  │ frames │  (vad.worker.js)  │                      │
 │  │ 16 kHz   │        │                   │                      │
 │  └──────────┘        │  Silero VAD ONNX  │                      │
-│                      └────────┬─────────┘                      │
+│                      └────────┬──────────┘                      │
 │                               │ speech segments                 │
 │                               ▼                                 │
-│                      ┌──────────────────┐                      │
+│                      ┌───────────────────┐                      │
 │                      │  TX Worker        │                      │
 │                      │  (transcribe.     │                      │
 │                      │   worker.js)      │                      │
 │                      │                   │                      │
 │                      │  Moonshine ONNX   │                      │
 │                      │  (WebGPU / WASM)  │                      │
-│                      └────────┬─────────┘                      │
+│                      └────────┬──────────┘                      │
 │                               │ transcript text                 │
 │                               ▼                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
+│  ┌──────────────────────────────────────────────────────────┐   │
 │  │  Script Matcher                                          │   │
 │  │                                                          │   │
-│  │  Token index ──▶ Banded Levenshtein ──▶ Beam tracker    │   │
-│  │  (Double Metaphone)   (O(n·k))          (multi-hyp)     │   │
+│  │  Token index ──▶ Banded Levenshtein ──▶ Beam tracker     │   │
+│  │  (Double Metaphone)   (O(n·k))          (multi-hyp)      │   │
 │  └──────────────────────────┬───────────────────────────────┘   │
-│                              │ confirmed word position          │
-│                              ▼                                  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  UI: highlight pill + rAF scroll lerp + creep ticker     │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│                             │ confirmed word position           │
+│                             ▼                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  UI: highlight pill + rAF scroll lerp + creep ticker      │  │
+│  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
