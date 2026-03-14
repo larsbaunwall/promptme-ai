@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
    TELEPROMPTER — Design System
-   Palette: Deep cinematic black + electric amber accent
+   Palette: Deep midnight indigo + electric violet accent
    Typography: Space Grotesk (UI) + JetBrains Mono (script)
 ═══════════════════════════════════════════════════════════ */
 
@@ -43,79 +43,79 @@
 
 /* ── Dark Mode (default) ── */
 :root, [data-theme="dark"] {
-  --color-bg:             #0d0d0e;
-  --color-surface:        #141416;
-  --color-surface-2:      #1a1a1d;
-  --color-surface-offset: #1f1f23;
-  --color-border:         #2a2a30;
-  --color-divider:        #222228;
+  --color-bg:             #08080f;
+  --color-surface:        #0f0f1c;
+  --color-surface-2:      #14142a;
+  --color-surface-offset: #1a1a33;
+  --color-border:         #252540;
+  --color-divider:        #1f1f38;
 
-  --color-text:           #e8e8ea;
-  --color-text-muted:     #8888a0;
-  --color-text-faint:     #44444e;
-  --color-text-inverse:   #0d0d0e;
+  --color-text:           #e8e8f5;
+  --color-text-muted:     #7070a0;
+  --color-text-faint:     #3a3a5c;
+  --color-text-inverse:   #08080f;
 
-  /* Amber accent — broadcast/studio feel */
-  --color-accent:         #f5a623;
-  --color-accent-hover:   #f7b944;
-  --color-accent-active:  #d4861a;
-  --color-accent-glow:    rgba(245, 166, 35, 0.15);
-  --color-accent-highlight: rgba(245, 166, 35, 0.08);
+  /* Electric violet accent */
+  --color-accent:         #7c6ef0;
+  --color-accent-hover:   #9284f5;
+  --color-accent-active:  #6355d4;
+  --color-accent-glow:    rgba(124, 110, 240, 0.20);
+  --color-accent-highlight: rgba(124, 110, 240, 0.10);
 
   --color-success:        #34d399;
-  --color-error:          #f87171;
-  --color-warning:        #fbbf24;
+  --color-error:          #f43f5e;
+  --color-warning:        #fb923c;
 
   /* Recording red */
-  --color-record:         #ef4444;
-  --color-record-glow:    rgba(239, 68, 68, 0.25);
+  --color-record:         #f43f5e;
+  --color-record-glow:    rgba(244, 63, 94, 0.28);
 
   /* Word highlight */
-  --color-word-current:   #f5a623;
-  --color-word-spoken:    #4a4a58;
-  --color-word-upcoming:  #e8e8ea;
-  --color-sentence-bg:    rgba(245, 166, 35, 0.06);
+  --color-word-current:   #a594f7;
+  --color-word-spoken:    #36365a;
+  --color-word-upcoming:  #e8e8f5;
+  --color-sentence-bg:    rgba(124, 110, 240, 0.07);
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-lg: 0 12px 40px rgba(8,8,24,0.7);
 }
 
 /* ── Light Mode ── */
 [data-theme="light"] {
-  --color-bg:             #f2f1ed;
-  --color-surface:        #faf9f6;
-  --color-surface-2:      #ffffff;
-  --color-surface-offset: #eeede8;
-  --color-border:         #d6d4cc;
-  --color-divider:        #e2e0d8;
+  --color-bg:             #f4f3ff;
+  --color-surface:        #ffffff;
+  --color-surface-2:      #faf9ff;
+  --color-surface-offset: #edeaff;
+  --color-border:         #cdc8f5;
+  --color-divider:        #dddaff;
 
-  --color-text:           #1a1a20;
-  --color-text-muted:     #5a5a70;
-  --color-text-faint:     #b0afc8;
-  --color-text-inverse:   #f2f1ed;
+  --color-text:           #1a1836;
+  --color-text-muted:     #5a5880;
+  --color-text-faint:     #a8a6cc;
+  --color-text-inverse:   #f4f3ff;
 
-  --color-accent:         #c97d10;
-  --color-accent-hover:   #b36a05;
-  --color-accent-active:  #9a5500;
-  --color-accent-glow:    rgba(201, 125, 16, 0.12);
-  --color-accent-highlight: rgba(201, 125, 16, 0.06);
+  --color-accent:         #5b4de0;
+  --color-accent-hover:   #4a3db5;
+  --color-accent-active:  #3b2d9a;
+  --color-accent-glow:    rgba(91, 77, 224, 0.14);
+  --color-accent-highlight: rgba(91, 77, 224, 0.08);
 
   --color-success:        #059669;
-  --color-error:          #dc2626;
-  --color-warning:        #d97706;
+  --color-error:          #e11d48;
+  --color-warning:        #ea580c;
 
-  --color-record:         #dc2626;
-  --color-record-glow:    rgba(220, 38, 38, 0.2);
+  --color-record:         #e11d48;
+  --color-record-glow:    rgba(225, 29, 72, 0.2);
 
-  --color-word-current:   #c97d10;
-  --color-word-spoken:    #b0afc8;
-  --color-word-upcoming:  #1a1a20;
-  --color-sentence-bg:    rgba(201, 125, 16, 0.04);
+  --color-word-current:   #5b4de0;
+  --color-word-spoken:    #b0aed0;
+  --color-word-upcoming:  #1a1836;
+  --color-sentence-bg:    rgba(91, 77, 224, 0.05);
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.14);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.09);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.13);
 }
 
 /* ── Base Reset ── */
@@ -623,7 +623,7 @@ img, svg { display: block; }
   transform: translateY(0);
   will-change: transform;
   contain: layout style;       /* isolate layout/style recalcs to this subtree */
-  transition: transform var(--transition-scroll);
+  /* Scroll animation driven by rAF lerp in app.js — no CSS transition here */
 }
 
 [data-mirror="true"] .teleprompter-content {
@@ -691,18 +691,18 @@ img, svg { display: block; }
 
 /* Hover: subtle highlight so users know words are clickable */
 .word:hover {
-  background: rgba(245, 166, 35, 0.13);
+  background: rgba(124, 110, 240, 0.14);
   color: var(--color-text);
   border-radius: 4px;
   transition: color 60ms ease, background 60ms ease;
 }
 [data-theme="light"] .word:hover {
-  background: rgba(201, 125, 16, 0.13);
+  background: rgba(91, 77, 224, 0.12);
 }
 
-/* Seek-pulse: brief amber flash confirming the manual jump */
+/* Seek-pulse: brief violet flash confirming the manual jump */
 @keyframes seek-pulse {
-  0%   { background: rgba(245, 166, 35, 0.55); box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.25); }
+  0%   { background: rgba(124, 110, 240, 0.55); box-shadow: 0 0 0 4px rgba(124, 110, 240, 0.28); }
   100% { background: var(--color-accent-highlight); box-shadow: none; }
 }
 .word.seek-pulse {
@@ -889,7 +889,7 @@ img, svg { display: block; }
 .model-progress-label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--color-accent, #f5a623);
+  color: var(--color-accent, #7c6ef0);
   margin-bottom: 6px;
 }
 
@@ -904,7 +904,7 @@ img, svg { display: block; }
 .model-progress-bar {
   height: 100%;
   width: 0%;
-  background: var(--color-accent, #f5a623);
+  background: var(--color-accent, #7c6ef0);
   border-radius: 2px;
   transition: width 0.3s ease;
   animation: progress-pulse 2s ease-in-out infinite;

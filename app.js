@@ -406,6 +406,42 @@ const CFG = {
 let _txCount = 0;
 
 // ═══════════════════════════════════════════════════════
+// SMOOTH SCROLL STATE
+// ═══════════════════════════════════════════════════════
+// All scrolling is done via a rAF lerp loop that interpolates
+// _scrollCurrent toward _scrollTarget each frame.
+// This decouples visual motion from discrete word/paragraph
+// updates, giving fluid easing for both word-creep and large
+// paragraph jumps without any CSS transition involvement.
+
+let _scrollTarget  = 0;  // desired translateY (pixels)
+let _scrollCurrent = 0;  // currently rendered translateY
+let _scrollRafId   = null;
+
+// Spring factor: fraction of remaining distance closed per frame @ ~60fps.
+// 0.09 ≈ 89% of distance closed within one 400ms word interval (150 WPM).
+// Large jumps (paragraph transitions) naturally cover distance faster, then
+// decelerate — giving a cinematic ease-out feel.
+const SCROLL_LERP = 0.09;
+
+function _scrollFrame() {
+  const diff = _scrollTarget - _scrollCurrent;
+  if (Math.abs(diff) < 0.15) {
+    _scrollCurrent = _scrollTarget;
+    _applyTransformRaw(_scrollCurrent);
+    _scrollRafId = null;
+    return;
+  }
+  _scrollCurrent += diff * SCROLL_LERP;
+  _applyTransformRaw(_scrollCurrent);
+  _scrollRafId = requestAnimationFrame(_scrollFrame);
+}
+
+function _startScrollAnim() {
+  if (!_scrollRafId) _scrollRafId = requestAnimationFrame(_scrollFrame);
+}
+
+// ═══════════════════════════════════════════════════════
 // DOM REFS
 // ═══════════════════════════════════════════════════════
 
@@ -918,26 +954,43 @@ function scrollToCurrent(smooth, mode) {
 
   if (Math.abs(delta) < 2) return;
 
-  const translateY = getCurrentTranslateY() - delta;
-  // Creep moves: very fast spring. Snap moves: slightly slower.
-  const dur = !smooth ? 80 : mode === 'creep' ? 150 : 260;
+  _scrollTarget = _scrollCurrent - delta;
 
-  dom.teleprompterContent.style.transition = `transform ${dur}ms cubic-bezier(0.22,1,0.36,1)`;
-  applyTransform(translateY);
+  if (!smooth) {
+    // Instant position change — cancel any running animation
+    if (_scrollRafId) { cancelAnimationFrame(_scrollRafId); _scrollRafId = null; }
+    _scrollCurrent = _scrollTarget;
+    _applyTransformRaw(_scrollCurrent);
+    return;
+  }
+
+  _startScrollAnim();
 }
 
-function applyTransform(ty) {
+// Internal: sets the CSS transform without touching the transition property
+function _applyTransformRaw(ty) {
   dom.teleprompterContent.style.transform = state.settings.mirror
     ? `scaleX(-1) translateY(${ty}px)`
     : `translateY(${ty}px)`;
 }
 
+// Public alias used by mirror-mode toggle and other callers
+function applyTransform(ty) {
+  _scrollTarget  = ty;
+  _scrollCurrent = ty;
+  _applyTransformRaw(ty);
+}
+
 function getCurrentTranslateY() {
-  return new DOMMatrix(window.getComputedStyle(dom.teleprompterContent).transform).m42;
+  return _scrollCurrent;
 }
 
 function resetPosition(clearTx = true) {
   stopCreep();
+  // Cancel any in-flight scroll animation and snap back to top
+  if (_scrollRafId) { cancelAnimationFrame(_scrollRafId); _scrollRafId = null; }
+  _scrollTarget  = 0;
+  _scrollCurrent = 0;
   if (state.paragraphCompleteTimer) { clearTimeout(state.paragraphCompleteTimer); state.paragraphCompleteTimer = null; }
   if (state.stallNudgeTimer)        { clearTimeout(state.stallNudgeTimer);        state.stallNudgeTimer        = null; }
 
@@ -965,7 +1018,6 @@ function resetPosition(clearTx = true) {
 
   if (clearTx) { state.accumulatedText=''; state.lastChunk=''; state.startingWord=''; state.recognitionBuffer=[]; }
 
-  dom.teleprompterContent.style.transition = 'none';
   dom.teleprompterContent.style.transform  = 'translateY(0)';
   dom.teleprompterContent.getBoundingClientRect();
 
