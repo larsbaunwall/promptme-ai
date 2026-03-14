@@ -7,7 +7,7 @@ A teleprompter that follows your voice rather than a timer. Paste in a script, p
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="screenshot-light.png">
-  <img alt="Screenshot" width="50%" src="screenshot-light.png">
+  <img alt="Screenshot" src="screenshot-light.png">
 </picture>
 
 ---
