@@ -61,7 +61,7 @@ As you speak, the script will automatically scroll to keep up with your words. E
 
 This teleprompter uses an embedded AI speech model that runs entirely in your browser. No data leaves your device, and no internet connection is required after the first load.
 
-To get started, press Start Recording. The microphone will listen to your voice and track your progress through the script automatically.
+To get started, press Start Speaking. The microphone will listen to your voice and track your progress through the script automatically.
 
 You can adjust the font size using the controls. Mirror mode flips the display horizontally for use with a physical teleprompter mirror rig.
 
@@ -472,7 +472,7 @@ function parseScript(text) {
 function renderScript() {
   const text = dom.scriptInput.value.trim();
   if (!text) {
-    dom.teleprompterContent.innerHTML = '<p class="empty-state-msg">Paste your script in the editor →</p>';
+    dom.teleprompterContent.innerHTML = '<div class="empty-state"><div class="empty-state-arrow">←</div><p class="empty-state-title">Your script lives here</p><p class="empty-state-sub">Paste it in the panel to the left,<br>then press <em>Start Speaking</em></p></div>';
     state.paragraphs = []; state.words = []; state.wordCount = 0;
     state.scriptNormTokens = []; state.tokenIndex = null;
     _spanCache = [];

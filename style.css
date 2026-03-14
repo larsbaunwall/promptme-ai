@@ -630,12 +630,52 @@ img, svg { display: block; }
   transform: scaleX(-1) translateY(0);
 }
 
-.empty-state-msg {
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  user-select: none;
+  pointer-events: none;
+}
+
+.empty-state-arrow {
+  font-size: 5rem;
+  line-height: 1;
+  color: var(--color-accent);
+  opacity: 0.18;
+  font-family: var(--font-body);
+  font-weight: 300;
+  filter: blur(0.5px);
+  animation: empty-float 4s ease-in-out infinite;
+}
+
+@keyframes empty-float {
+  0%, 100% { transform: translateX(0); opacity: 0.18; }
+  50%       { transform: translateX(-10px); opacity: 0.28; }
+}
+
+.empty-state-title {
   color: var(--color-text-faint);
   font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+}
+
+.empty-state-sub {
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
   font-weight: 400;
-  max-width: 400px;
-  margin: 0 auto;
+  line-height: 1.8;
+  text-align: center;
+  opacity: 0.7;
+}
+.empty-state-sub em {
+  font-style: normal;
+  color: var(--color-accent);
+  opacity: 0.8;
 }
 
 /* Word spans */
@@ -760,6 +800,16 @@ img, svg { display: block; }
 }
 .app-footer a:hover { color: var(--color-text-muted); }
 .footer-sep { color: var(--color-text-faint); }
+
+.footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-faint);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+.footer-github:hover { color: var(--color-text-muted); }
 
 /* ═══════════════════════════════════════
    UTILITIES
