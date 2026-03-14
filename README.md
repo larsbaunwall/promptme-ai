@@ -99,3 +99,7 @@ Open `http://localhost:8080`.
 | Inference backend | WebGPU / WASM (auto-detected) |
 | Phonetic encoding | Double Metaphone (`words/double-metaphone`) |
 | UI | Vanilla JS + CSS, no framework |
+
+---
+
+<a href="https://www.producthunt.com/products/prompt-me?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-prompt-me" target="_blank" rel="noopener noreferrer"><img alt="Prompt Me! - A teleprompter that scrolls as you speak | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1098131&amp;theme=neutral&amp;t=1773487745465"></a>
