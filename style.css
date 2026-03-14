@@ -521,6 +521,8 @@ img, svg { display: block; }
   color: var(--color-text-faint);
   font-family: var(--font-mono);
   font-size: 0.7rem;
+  padding-left: 10px;
+  text-align: center;
 }
 
 /* Interim transcript box — live partial result */
