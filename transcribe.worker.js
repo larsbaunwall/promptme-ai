@@ -64,32 +64,34 @@ self.postMessage({ type: 'status', status: 'ready', message: 'Ready' });
 let txChain = Promise.resolve();
 let _latestPartial = null;   // newest partial buffer, replaces any pending one
 
-async function transcribeAndEmit(buffer, isFinal) {
+async function transcribeAndEmit(buffer, isFinal, vadEmitTs, audioMs) {
+  const txStartTs = performance.now();
   self.postMessage({ type: 'status', status: 'transcribing', message: 'Transcribing…' });
   const { text } = await transcriber(buffer);
+  const txEndTs = performance.now();
   const cleaned = text.trim();
-  if (cleaned) self.postMessage({ type: 'transcript', text: cleaned, isFinal });
+  if (cleaned) self.postMessage({ type: 'transcript', text: cleaned, isFinal, vadEmitTs, audioMs, txStartTs, txEndTs, txDurMs: Math.round(txEndTs - txStartTs) });
   self.postMessage({ type: 'status', status: 'recording', message: 'Listening…' });
 }
 
 // ── Main message handler ──────────────────────────────────────────────────────
 self.onmessage = ({ data }) => {
-  const { type, buffer, isFinal } = data;
+  const { type, buffer, isFinal, vadEmitTs, audioMs } = data;
   if (type !== 'segment' || !buffer) return;
 
   if (isFinal) {
     // Finals are never dropped — they contain the full utterance.
-    txChain = txChain.then(() => transcribeAndEmit(buffer, true).catch(
+    txChain = txChain.then(() => transcribeAndEmit(buffer, true, vadEmitTs, audioMs).catch(
       err => console.error('[TX worker] Transcription error:', err)));
   } else {
     // For partials: store latest buffer. When the chain reaches this entry
     // it grabs the freshest one and skips any that were superseded.
-    _latestPartial = buffer;
+    _latestPartial = { buffer, vadEmitTs, audioMs };
     txChain = txChain.then(() => {
-      const buf = _latestPartial;
-      if (!buf) return;           // already consumed by a newer chain entry
+      const p = _latestPartial;
+      if (!p) return;           // already consumed by a newer chain entry
       _latestPartial = null;      // claim it
-      return transcribeAndEmit(buf, false).catch(() => {});
+      return transcribeAndEmit(p.buffer, false, p.vadEmitTs, p.audioMs).catch(() => {});
     });
   }
 };

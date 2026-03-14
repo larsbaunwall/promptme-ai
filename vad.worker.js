@@ -114,7 +114,7 @@ function maybeEmitPartial() {
   segment.set(BUFFER.subarray(0, bufferPointer), off);
 
   // No transfer — VAD worker continues using BUFFER for ongoing speech
-  self.postMessage({ type: 'segment', buffer: segment, isFinal: false });
+  self.postMessage({ type: 'segment', buffer: segment, isFinal: false, vadEmitTs: performance.now(), audioMs: Math.round(segment.length / SAMPLE_RATE * 1000) });
 }
 
 function reset(offset = 0) {
@@ -134,7 +134,7 @@ function flushAndTranscribe(overflow) {
 
   // Transfer buffer — zero-copy. After this the segment ArrayBuffer is owned
   // by the main thread (which re-transfers it to the TX worker).
-  self.postMessage({ type: 'segment', buffer: segment, isFinal: true }, [segment.buffer]);
+  self.postMessage({ type: 'segment', buffer: segment, isFinal: true, vadEmitTs: performance.now(), audioMs: Math.round(segment.length / SAMPLE_RATE * 1000) }, [segment.buffer]);
 
   prevBuffers = [];
   _prevBufLen = 0;

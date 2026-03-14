@@ -20,15 +20,53 @@ The speech recognition runs entirely inside the browser tab, embedded as an ONNX
 
 ## The embedded speech model
 
-Recognition is handled by **[Moonshine](https://github.com/usefulsensors/moonshine)** (Useful Sensors), a compact ASR model designed for on-device use. It's loaded via [Transformers.js](https://huggingface.co/docs/transformers.js) and runs in a dedicated Web Worker, so it never competes with the UI thread.
+Recognition is handled by **[Moonshine](https://github.com/usefulsensors/moonshine)** (Useful Sensors), a compact ASR model designed for on-device use. It's loaded via [Transformers.js](https://huggingface.co/docs/transformers.js) and runs in dedicated Web Workers (one for voice activity detection, one for transcription), so it never competes with the UI thread.
 
 The full pipeline looks like this:
 
 ```text
 Microphone → AudioWorklet (PCM @ 16kHz)
            → Silero VAD (skips inference on silent frames)
-           → Moonshine Base ONNX (speech-to-text)
+           → Moonshine Tiny ONNX (speech-to-text)
            → Main thread (script matching + scroll)
+```
+
+### Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Browser main thread  (app.js)                                  │
+│                                                                 │
+│  ┌──────────┐  PCM   ┌──────────────────┐                      │
+│  │ Audio    │───────▶│  VAD Worker       │                      │
+│  │ Worklet  │ frames │  (vad.worker.js)  │                      │
+│  │ 16 kHz   │        │                   │                      │
+│  └──────────┘        │  Silero VAD ONNX  │                      │
+│                      └────────┬─────────┘                      │
+│                               │ speech segments                 │
+│                               ▼                                 │
+│                      ┌──────────────────┐                      │
+│                      │  TX Worker        │                      │
+│                      │  (transcribe.     │                      │
+│                      │   worker.js)      │                      │
+│                      │                   │                      │
+│                      │  Moonshine ONNX   │                      │
+│                      │  (WebGPU / WASM)  │                      │
+│                      └────────┬─────────┘                      │
+│                               │ transcript text                 │
+│                               ▼                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Script Matcher                                          │   │
+│  │                                                          │   │
+│  │  Token index ──▶ Banded Levenshtein ──▶ Beam tracker    │   │
+│  │  (Double Metaphone)   (O(n·k))          (multi-hyp)     │   │
+│  └──────────────────────────┬───────────────────────────────┘   │
+│                              │ confirmed word position          │
+│                              ▼                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  UI: highlight pill + rAF scroll lerp + creep ticker     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 Where WebGPU is available the model runs on the GPU; otherwise it falls back to WASM. On first load the model weights (~100 MB) are fetched and cached — after that the page works offline.
@@ -61,17 +99,15 @@ Scripts repeat words. Without a locality signal, the matcher has no way to disti
 
 ### Optimistic word creep
 
-Moonshine's ~600 ms batch latency would cause the highlight to jump forward in visible lurches. Instead, the tracker measures your current speaking rate and **speculatively advances the highlight by roughly one word per second** between confirmed results. When the next transcript arrives the position snaps back to the confirmed location. The lookahead is capped at two words to limit how far it can stray.
-
-A **shadow cursor** — a faint ghost highlight two words ahead — and a **paragraph lookahead** that softly pre-highlights the opening word of the next paragraph as you near the end of the current one, round out the perceptual smoothness. The underlying model is still processing in chunks; it just does not look that way.
+Moonshine's ~600 ms batch latency would cause the highlight to jump forward in visible lurches. Instead, the tracker measures your current speaking rate and **speculatively advances the highlight at ~85% of the measured WPM** between confirmed results. When the next transcript arrives the position snaps back to the confirmed location. The lookahead is capped at three words to limit how far it can stray. The underlying model is still processing in chunks; it just does not look that way.
 
 ## Features
 
 - Runs entirely in the browser — no server, no API, no account
 - WebGPU acceleration where supported, WASM fallback otherwise
 - Mirror mode for use with a physical half-mirror rig
-- Adjustable font size
-- Live WPM counter and progress indicator
+- Adjustable font size and speaking pace (WPM slider)
+- Live WPM counter, progress indicator, and ETA
 - Dark and light theme
 - Works offline after first load
 

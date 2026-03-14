@@ -393,7 +393,7 @@ const CFG = {
   PARA_COMPLETE_DELAY:     500,
   GLOBAL_INTERVAL:         3,     // run global search every N transcripts
   CREEP_SILENCE_PAUSE_MS:  1000,  // ms after last transcript before creep freezes
-  CREEP_MAX_LOOKAHEAD:     3,     // max words creep can go ahead of confirmed position
+  CREEP_MAX_LOOKAHEAD:     2,     // max words creep can go ahead of confirmed position
   // ── Locality-aware matching ──────────────────────────────────────────────
   LOCALITY_HALVING_DIST:   20,    // words ahead at which locality factor drops to 0.5
   SEARCH_LOOKBACK:         11,    // words BEHIND currentPos still included as candidates
@@ -402,6 +402,37 @@ const CFG = {
 };
 
 let _txCount = 0;
+
+// ═══════════════════════════════════════════════════════
+// METRICS LOG  (performance stream — copy after session)
+// ═══════════════════════════════════════════════════════
+const _metricsLog = [];
+let _metricsT0 = 0;  // set on first recording start
+
+function _mt() { return performance.now() - _metricsT0; }
+
+function _mlog(evt, data) {
+  _metricsLog.push({ t: Math.round(_mt()), evt, ...data });
+}
+
+function copyMetricsLog() {
+  const payload = {
+    cfg: { ...CFG },
+    wpmSlider: dom.wpmRange ? Number(dom.wpmRange.value) : CFG.WPM_DEFAULT,
+    scriptWordCount: state.wordCount,
+    sessionDurationMs: Math.round(_mt()),
+    events: _metricsLog,
+  };
+  const json = JSON.stringify(payload);
+  navigator.clipboard.writeText(json).then(
+    () => setStatus('idle', `Metrics copied (${_metricsLog.length} events, ${(json.length / 1024).toFixed(0)} KB)`),
+    () => {
+      // Fallback: open in new tab
+      const blob = new Blob([json], { type: 'application/json' });
+      window.open(URL.createObjectURL(blob));
+    }
+  );
+}
 
 // ═══════════════════════════════════════════════════════
 // SMOOTH SCROLL STATE
@@ -468,6 +499,7 @@ const dom = {
   wpmRangeVal:           $('wpmRangeVal'),
   mirrorToggle:          $('mirrorToggle'),
   resetBtn:              $('resetBtn'),
+  copyMetricsBtn:        $('copyMetricsBtn'),
   fullscreenBtn:         $('fullscreenBtn'),
   modelProgress:         $('modelProgress'),
   modelProgressBar:      $('modelProgressBar'),
@@ -692,7 +724,12 @@ function recordAnchor(newIdx) {
     const ms    = now - state.lastAnchorTime;
     if (ms > 400) {
       const wpm = words / (ms / 60000);
-      if (wpm > 40 && wpm < 450) {
+      // Cap individual samples: catch-up jumps inflate WPM beyond reality.
+      // Floor at 40, ceiling at slider + 40% to track genuine pace changes
+      // without letting a 15-word catch-up spike the average.
+      const sliderWpm = dom.wpmRange ? Number(dom.wpmRange.value) : CFG.WPM_DEFAULT;
+      const capHi = sliderWpm * 1.4;
+      if (wpm > 40 && wpm <= capHi) {
         state.wpmSamples.push(wpm);
         if (state.wpmSamples.length > 8) state.wpmSamples.shift();
         // Trimmed mean: drop highest and lowest
@@ -752,7 +789,7 @@ function creepTick(now) {
   // On pause: freeze in place (no rollback — backward animation is jarring).
   // The creep will restart forward from the transcript-confirmed position when
   // speech resumes and a new transcript snaps us to the real position.
-  const silentMs = now - state.lastSpeechTime;
+  const silentMs = Date.now() - state.lastSpeechTime;
   if (state.lastSpeechTime === 0 || silentMs > CFG.CREEP_SILENCE_PAUSE_MS) {
     _creepFractional = 0;
     requestAnimationFrame(creepTick);
@@ -777,6 +814,8 @@ function creepTick(now) {
       // Soft move: mark words spoken-ish (creep class), not full spoken
       moveCreep(target);
       updateShadowCursor();
+      // Sampled creep log — every advancement
+      _mlog('creep', { pos: target, creepTarget: state.creepTargetIndex, wpm, silentMs: Math.round(Date.now() - state.lastSpeechTime) });
     }
   }
 
@@ -1195,6 +1234,7 @@ function scheduleStallNudge() {
 function processTranscript(chunk, isFinal) {
   if (!chunk?.trim() || !state.paragraphs.length) return;
   _txCount++;
+  const _pt0 = performance.now();
 
   // Track speech activity — used by creep pause logic and stall nudge silence gate
   state.lastSpeechTime = Date.now();
@@ -1209,20 +1249,21 @@ function processTranscript(chunk, isFinal) {
     : null;
   const m3 = isFinal ? ariaMatch(acc) : null;                    // full accumulated (final only)
   // m4: tail of accumulated transcript — last 12 words, run on EVERY transcript.
-  // As the session grows this becomes the most drift-resistant position signal:
-  // surrounding confirmed words vote for the correct window even when the
-  // current chunk is garbled. Works on interim too, closing the latency gap.
   const accTail = acc ? acc.split(/\s+/).slice(-12).join(' ') : null;
   const m4 = (accTail && accTail !== chunk && accTail !== acc) ? ariaMatch(accTail) : null;
 
   // Pick best
   let best = null;
-  for (const m of [m1, m2, m3, m4]) {
-    if (m && (!best || m.score > best.score)) best = m;
+  let bestLabel = '';
+  const matchers = [['m1', m1], ['m2', m2], ['m3', m3], ['m4', m4]];
+  for (const [label, m] of matchers) {
+    if (m && (!best || m.score > best.score)) { best = m; bestLabel = label; }
   }
 
   // ── Update beam ──
   const hyp = updateBeam(best);
+
+  const prevPos = state.currentWordIndex;
 
   // ── Advance if beam converged ──
   if (hyp && hyp.pos > state.currentWordIndex) {
@@ -1242,6 +1283,23 @@ function processTranscript(chunk, isFinal) {
 
   // ── Ensure creep is running ──
   if (state.isRecording && !state.creepActive) startCreep();
+
+  // ── Metrics ──
+  const _pt1 = performance.now();
+  _mlog('match', {
+    isFinal, txN: _txCount,
+    chunk: chunk.slice(0, 120),
+    matchers: matchers.map(([l, m]) => m ? { l, pos: m.globalIdx, sc: +m.score.toFixed(3), raw: +m.rawScore.toFixed(3), anc: m.isAnchor } : null).filter(Boolean),
+    best: bestLabel || null,
+    beam: state.hypotheses.map(h => ({ pos: h.pos, sc: +h.score.toFixed(3), age: h.age })),
+    hyp: hyp ? { pos: hyp.pos, sc: +hyp.score.toFixed(3) } : null,
+    moved: state.currentWordIndex !== prevPos,
+    pos: state.currentWordIndex,
+    creepTarget: state.creepTargetIndex,
+    anchorWpm: Math.round(state.anchorWpm),
+    paraIdx: state.currentParaIndex,
+    matchMs: +(_pt1 - _pt0).toFixed(1),
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1371,6 +1429,15 @@ function initWorker() {
 
     if (type === 'transcript') {
       if (text?.trim()) {
+        const mainArriveTs = performance.now();
+        _mlog('transcript_arrive', {
+          isFinal,
+          text,
+          txDurMs: data.txDurMs,
+          audioMs: data.audioMs,
+          // End-to-end: VAD emit → main thread arrival (includes TX inference + message passing)
+          e2eMs: data.vadEmitTs ? Math.round(mainArriveTs - data.vadEmitTs) : null,
+        });
         appendTranscript(text, isFinal === false);
         processTranscript(text, isFinal !== false);
         if (!state.sessionStartTime) {
@@ -1407,9 +1474,12 @@ function initWorker() {
   state.vadWorker = new Worker('./vad.worker.js', { type: 'module' });
   state.vadWorker.onmessage = ({ data }) => {
     if (data.type === 'segment') {
+      // Stamp relay timing for metrics
+      data.relayTs = performance.now();
       // Relay audio segment to transcription worker.
       // Finals are transferred (zero-copy); partials are copies so also safe to transfer.
       state.txWorker.postMessage(data, data.buffer ? [data.buffer.buffer] : []);
+      _mlog('vad_segment', { isFinal: data.isFinal, audioMs: data.audioMs });
       return;
     }
     handleMessage({ data });
@@ -1482,10 +1552,15 @@ function startRecording() {
   if (!state.words.length) { dom.scriptInput.value = SAMPLE_SCRIPT; renderScript(); }
   if (!state.vadWorker) initWorker();
   if (!state.modelReady) { state._startPending = true; setStatus('loading','Loading AI model…'); updateButtons(true); return; }
+  if (!_metricsT0) _metricsT0 = performance.now();
+  _mlog('start', { wordCount: state.wordCount, wpmSlider: dom.wpmRange ? Number(dom.wpmRange.value) : CFG.WPM_DEFAULT });
   startAudio();
 }
 
-function stopRecording() { state._startPending = false; stopAudio(); }
+function stopRecording() {
+  _mlog('stop', { pos: state.currentWordIndex, creepTarget: state.creepTargetIndex, anchorWpm: Math.round(state.anchorWpm) });
+  state._startPending = false; stopAudio();
+}
 
 function updateButtons(active) {
   if (dom.startBtn) dom.startBtn.disabled = active;
@@ -1560,6 +1635,7 @@ function wireEvents() {
   dom.startBtn.addEventListener('click', startRecording);
   dom.stopBtn.addEventListener('click', stopRecording);
   dom.resetBtn?.addEventListener('click', () => resetPosition(true));
+  dom.copyMetricsBtn?.addEventListener('click', e => { e.preventDefault(); copyMetricsLog(); });
 
   // Click-to-seek: clicking any word in the teleprompter moves the pointer there
   dom.teleprompterContent.addEventListener('click', e => {
@@ -1624,6 +1700,8 @@ init();
 
 window.__teleprompter = {
   processTranscript,
+  copyMetricsLog,
+  getMetrics: () => _metricsLog,
   getState: () => ({
     currentWordIndex: state.currentWordIndex,
     currentParaIndex: state.currentParaIndex,

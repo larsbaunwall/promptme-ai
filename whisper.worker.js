@@ -109,7 +109,7 @@ let transcriber;
 try {
   transcriber = await pipeline(
     'automatic-speech-recognition',
-    'onnx-community/moonshine-tiny-ONNX',
+    'onnx-community/moonshine-base-ONNX',
     {
       device, dtype: DTYPE_CONFIGS[device],
       progress_callback: (progress) => {

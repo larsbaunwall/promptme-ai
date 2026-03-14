@@ -831,6 +831,14 @@ img, svg { display: block; }
 }
 .footer-github:hover { color: var(--color-text-muted); }
 
+.footer-metrics {
+  color: var(--color-text-faint);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+  cursor: pointer;
+}
+.footer-metrics:hover { color: var(--color-text-muted); }
+
 /* ═══════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════ */
