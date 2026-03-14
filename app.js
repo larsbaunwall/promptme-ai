@@ -1013,8 +1013,15 @@ function movePillToWord(idx) {
   const contentRect = dom.teleprompterContent.getBoundingClientRect();
   const spanRect    = span.getBoundingClientRect();
   const PH = 5, PV = 3;
+  // getBoundingClientRect returns visual (post-transform) coords.
+  // In mirror mode (scaleX -1) the horizontal position is flipped visually,
+  // but pill.style.left is in local (pre-transform) space — undo the flip.
+  let left = spanRect.left - contentRect.left;
+  if (state.settings.mirror) {
+    left = contentRect.width - left - spanRect.width;
+  }
   pill.style.top    = (spanRect.top  - contentRect.top  - PV) + 'px';
-  pill.style.left   = (spanRect.left - contentRect.left - PH) + 'px';
+  pill.style.left   = (left - PH) + 'px';
   pill.style.width  = (spanRect.width  + PH * 2) + 'px';
   pill.style.height = (spanRect.height + PV * 2) + 'px';
   if (state.wordCount > 0) pill.style.opacity = '1';
