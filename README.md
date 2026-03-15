@@ -1,6 +1,10 @@
-# AI-infused teleprompter running 100% in your browser
+# A teleprompter that listens to you
 
-A teleprompter that follows your voice rather than a timer. Paste in a script, press record, and it highlights the current word and scrolls as you speak — no foot pedal, no backend, no data leaving the browser.
+Most teleprompters scroll at a fixed speed and expect you to keep up.
+
+This one does the opposite: it listens to your voice and tracks your position in the script in real time. If you pause it waits. If you skip a line it finds its way back.
+
+Everything runs **entirely inside the browser** – speech recognition, fuzzy matching, and scrolling. No backend, no accounts, no audio leaving the tab.
 
 :sparkles: **[Try it online](https://larsbaunwall.github.io/promptme-ai)**
 
