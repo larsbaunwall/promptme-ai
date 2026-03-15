@@ -800,7 +800,15 @@ function creepTick(now) {
   // Creep at 85% of measured WPM — stays just behind the speaker,
   // letting transcript confirmations snap forward cleanly.
   const wordsPerMs = (wpm * 0.85) / 60000;
-  _creepFractional += wordsPerMs * dt;
+
+  // Punctuation-aware deceleration: slow down after sentence-ending punctuation
+  // because speakers naturally pause at periods, question marks, etc.
+  const prevWord = state.words[state.currentWordIndex - 1];
+  const prevText = prevWord ? prevWord.text : '';
+  const endsWithSentence = /[.!?:;—]["'»)]*$/.test(prevText);
+  const puncScale = endsWithSentence ? 0.45 : 1;
+
+  _creepFractional += wordsPerMs * dt * puncScale;
 
   if (_creepFractional >= 1) {
     const steps = Math.floor(_creepFractional);
